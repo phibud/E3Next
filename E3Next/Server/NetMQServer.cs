@@ -10,6 +10,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace E3Core.Server
 {
@@ -62,6 +63,11 @@ namespace E3Core.Server
 			{
                 MQ.Write("/ui has been depreciated, please use /e3ui");
 			});
+			EventProcessor.RegisterCommand("/e3debug-config", (x) =>
+			{
+                PrintCharConfigLaunch();
+			});
+
 			EventProcessor.RegisterCommand("/e3config", (x) =>
 			{
 				LaunchCharConfig();
@@ -131,6 +137,17 @@ namespace E3Core.Server
 			}
 			
 		}
+        static void PrintCharConfigLaunch()
+        {
+
+			string dllFullPath = Assembly.GetExecutingAssembly().CodeBase.Replace("file:///", "").Replace("/", "\\").Replace("e3.dll", "");
+			string exeName = "E3NextConfigEditor.exe";
+			Int32 processID = System.Diagnostics.Process.GetCurrentProcess().Id;
+			
+            string startInfoString = dllFullPath + exeName + $" {RouterPort} {processID}";
+			MQ.Write(startInfoString);
+
+		}
 		static void LaunchCharConfig()
 		{
 			string dllFullPath = Assembly.GetExecutingAssembly().CodeBase.Replace("file:///", "").Replace("/", "\\").Replace("e3.dll", "");
@@ -142,6 +159,7 @@ namespace E3Core.Server
 				var startInfo = new ProcessStartInfo(dllFullPath + exeName);
 				startInfo.WorkingDirectory = dllFullPath;// working directory
 				startInfo.Arguments = $"{RouterPort} {processID}";// set additional properties 
+				startInfo.UseShellExecute = false;
 				ConfigProcess = System.Diagnostics.Process.Start(startInfo);
 
 			}
@@ -156,6 +174,7 @@ namespace E3Core.Server
 					var startInfo = new ProcessStartInfo(dllFullPath + exeName);
 					startInfo.WorkingDirectory = dllFullPath;// working directory
 					startInfo.Arguments = $"{RouterPort} {processID}";// set additional properties 
+					startInfo.UseShellExecute = false;
 					ConfigProcess = System.Diagnostics.Process.Start(startInfo);
 				}
 			}
@@ -173,7 +192,11 @@ namespace E3Core.Server
             {
                 Int32 processID = System.Diagnostics.Process.GetCurrentProcess().Id;
                 MQ.Write("Trying to start:" + dllFullPath + @"E3NextUI.exe");
-                UIProcess = System.Diagnostics.Process.Start(dllFullPath + @"E3NextUI.exe", $"{PubPort} {RouterPort} {PubClientPort} {processID}");
+                var startInfo = new ProcessStartInfo(dllFullPath + @"E3NextUI.exe");
+                startInfo.WorkingDirectory = dllFullPath;
+                startInfo.Arguments = $"{PubPort} {RouterPort} {PubClientPort} {processID}";
+                startInfo.UseShellExecute = false;
+                UIProcess = System.Diagnostics.Process.Start(startInfo);
 				
                 //wire up the events to send data over to the UI.
                 EventProcessor.RegisterUnfilteredEventMethod("E3UI", (x) => {
@@ -197,7 +220,11 @@ namespace E3Core.Server
                     Int32 processID = System.Diagnostics.Process.GetCurrentProcess().Id;
                     //start up a new one.
                     MQ.Write("Trying to start again:" + dllFullPath + @"E3NextUI.exe");
-                    UIProcess = System.Diagnostics.Process.Start(dllFullPath + @"E3NextUI.exe", $"{PubPort} {RouterPort} {PubClientPort} {processID}");
+                    var startInfo = new ProcessStartInfo(dllFullPath + @"E3NextUI.exe");
+                    startInfo.WorkingDirectory = dllFullPath;
+                    startInfo.Arguments = $"{PubPort} {RouterPort} {PubClientPort} {processID}";
+                    startInfo.UseShellExecute = false;
+                    UIProcess = System.Diagnostics.Process.Start(startInfo);
                 }
                 else 
                 {
@@ -227,7 +254,11 @@ namespace E3Core.Server
                 var discordMyUserId = string.IsNullOrEmpty(E3.GeneralSettings.DiscordMyUserId) ? string.Empty : E3.GeneralSettings.DiscordMyUserId;
                 var commandLineArgs = $"{PubPort} {RouterPort} {PubClientPort} {E3.GeneralSettings.DiscordBotToken} " +
                     $"{E3.GeneralSettings.DiscordGuildChannelId} {E3.GeneralSettings.DiscordServerId} {processID} {E3.GeneralSettings.DiscordMyUserId}";
-                DiscordProcess = System.Diagnostics.Process.Start(dllFullPath + "E3Discord.exe", commandLineArgs);
+				var startInfo = new ProcessStartInfo(processName);
+				startInfo.WorkingDirectory = dllFullPath;// working directory
+                startInfo.Arguments = commandLineArgs;
+				startInfo.UseShellExecute = false;
+				DiscordProcess = System.Diagnostics.Process.Start(startInfo);
                 MQ.Write($"\agStarted {processName}");
             }
             else

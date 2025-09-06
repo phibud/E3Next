@@ -44,7 +44,7 @@ namespace E3Core.Processors
         static public Int32 _numInventorySlots = 10;
         static public Int32 _previousSpellGemThatWasCast = -1;
 		[ExposedData("Setup", "Version")]
-		public const string _e3Version = "1.48";
+		public const string _e3Version = "1.49_devbuild";
 		[ExposedData("Setup", "BuildDate")]
 		public static string _buildDate = string.Empty;
         public static Boolean _debug = true;
@@ -102,7 +102,14 @@ namespace E3Core.Processors
 
 				InitPlugins();
                 InitSubSystems();
+
+				//after all subsystems have been init, lets init the server specific ones, as they can override events/commands
+				SeverSpecific.SeverSpecific_Init();
+
 				GetExposedDataMappedToDictionary();
+
+
+
 
 				foreach (var command in E3.CharacterSettings.StartupCommands)
                 {
@@ -146,7 +153,7 @@ namespace E3Core.Processors
 				e3util.ToggleBooleanSetting(ref _broadcastWrites, "Broadcast Writes", x.args);
 
 
-			});
+			},"Have your toon broadcast writes out to the MQ window for a conssolidated view.");
 		}
 			private static void InitSubSystems()
         {

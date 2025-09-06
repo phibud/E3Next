@@ -1,21 +1,22 @@
 ﻿using E3Core.Data;
 using E3Core.Processors;
+using E3Core.Server;
 using E3Core.Settings;
 using IniParser;
 using MonoCore;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Net.Sockets;
 using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using static MonoCore.EventProcessor;
-using E3Core.Server;
-using System.Reflection;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 
 namespace E3Core.Utility
 {
@@ -48,6 +49,66 @@ namespace E3Core.Utility
 				returnValue = result;
 			}
 			return returnValue;
+		}
+		public static List<String> _raidHealers = new List<string>();
+		public static List<String> GetRaidHealers()
+		{
+			_raidHealers.Clear();
+			Int32 raidSize = MQ.Query<Int32>("${Raid.Members}");
+
+			for (Int32 x = 0; x < raidSize; x++)
+			{
+				string className = MQ.Query<String>($"${{Raid.Member[{x}].Class.ShortName}}");
+
+				if (className == "CLR" || className == "DRU" || className == "SHM")
+				{
+					string raidMemberName = MQ.Query<String>($"${{Raid.Member[{x}].Name}}");
+					if (Basics.GroupMemberNames.Contains(raidMemberName, StringComparer.OrdinalIgnoreCase)) continue;
+
+					_raidHealers.Add(raidMemberName);
+				}
+			}
+			return _raidHealers;
+		}
+
+		public static List<String> _raidTanks = new List<string>();
+		public static List<String> GetRaidTanks()
+		{
+			_raidTanks.Clear();
+			Int32 raidSize = MQ.Query<Int32>("${Raid.Members}");
+
+			for (Int32 x = 0; x < raidSize; x++)
+			{
+				string className = MQ.Query<String>($"${{Raid.Member[{x}].Class.ShortName}}");
+
+				if(className=="SHD"|| className=="WAR" || className=="PAL")
+				{
+					string raidMemberName = MQ.Query<String>($"${{Raid.Member[{x}].Name}}");
+
+					if (Basics.GroupMemberNames.Contains(raidMemberName,StringComparer.OrdinalIgnoreCase)) continue;
+
+					_raidTanks.Add(raidMemberName);
+				}
+			}
+			return _raidTanks;
+		}
+		public static Dictionary<String, Int32> _xtargetPlayers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		public static Dictionary<String, Int32> GetXTargetPlayers()
+		{
+			_xtargetPlayers.Clear();
+
+			for (Int32 x = 1; x <= XtargetMax; x++)
+			{
+
+				if (!MQ.Query<bool>($"${{Me.XTarget[{x}].TargetType.Equal[Specific PC]}}")) continue;
+				string name = MQ.Query<String>($"${{Me.XTarget[{x}].CleanName}}");
+			
+				if (name!="NULL")
+				{
+					_xtargetPlayers.Add(name,x);
+				}
+			}
+			return _xtargetPlayers;
 		}
 
 		public static string ArgsToCommand(List<String> args)
@@ -1024,6 +1085,70 @@ namespace E3Core.Utility
 
 			return tempMaxAggro;
 		}
+		public static Int32 GetXtargetLowestHP()
+		{
+			Int32 tempLowestHP = 100;
+			Int32 currentLowestHP = 100;
+			Int32 lowstHPMob = -1;
+
+			for (Int32 i = 1; i <= 13; i++)
+			{
+				bool autoHater = MQ.Query<bool>($"${{Me.XTarget[{i}].TargetType.Equal[Auto Hater]}}");
+				if (!autoHater) continue;
+				Int32 mobId = MQ.Query<Int32>($"${{Me.XTarget[{i}].ID}}");
+				if (mobId > 0)
+				{
+					Spawn s;
+					if (_spawns.TryByID(mobId, out s))
+					{
+						if (s.Aggressive)
+						{
+							tempLowestHP = MQ.Query<Int32>($"${{Me.XTarget[{i}].PctHPs}}");
+							if (tempLowestHP >0 && tempLowestHP < currentLowestHP)
+							{
+								currentLowestHP = tempLowestHP;
+								lowstHPMob = mobId;
+							}
+						}
+					}
+				}
+			}
+			MQ.Write($"Lowest HP is mob:{lowstHPMob} with percent of {currentLowestHP}");
+			return lowstHPMob;
+		}
+		public static Int32 GetXtargetHighestHP()
+		{
+			Int32 tempHighestHP = 100;
+			Int32 currentHighestHP = 0;
+			Int32 highestHPMob = -1;
+
+			for (Int32 i = 1; i <= 13; i++)
+			{
+				bool autoHater = MQ.Query<bool>($"${{Me.XTarget[{i}].TargetType.Equal[Auto Hater]}}");
+				if (!autoHater) continue;
+				Int32 mobId = MQ.Query<Int32>($"${{Me.XTarget[{i}].ID}}");
+				if (mobId > 0)
+				{
+					Spawn s;
+					if (_spawns.TryByID(mobId, out s))
+					{
+						if (s.Aggressive)
+						{
+							tempHighestHP = MQ.Query<Int32>($"${{Me.XTarget[{i}].PctHPs}}");
+							if (tempHighestHP > 0 && tempHighestHP > currentHighestHP)
+							{
+								currentHighestHP = tempHighestHP;
+								highestHPMob = mobId;
+								if (currentHighestHP == 100) break;
+								
+							}
+						}
+					}
+				}
+			}
+			MQ.Write($"Hiest HP is mob:{highestHPMob} with percent of {currentHighestHP}");
+			return highestHPMob;
+		}
 		public static Int32 GetXtargetMinAggro()
 		{
 			Int32 currentAggro = 0;
@@ -1267,7 +1392,7 @@ namespace E3Core.Utility
 			fileIniData.Parser.Configuration.OverrideDuplicateKeys = true;// so that the other ones will be put into a collection
 			fileIniData.Parser.Configuration.AssigmentSpacer = "";
 			fileIniData.Parser.Configuration.CaseInsensitive = true;
-
+	
 			return fileIniData;
 		}
 		/// <summary>
@@ -1437,6 +1562,25 @@ namespace E3Core.Utility
 			MQ.Delay(2000, "${Merchant.ItemsReceived}");
 			return true;
 		}
+		public static bool OpenBank()
+		{
+			var target = MQ.Query<int>("${Target.ID}");
+			if (target <= 0)
+			{
+				var merchantId = MQ.Query<int>("${Spawn[banker los].ID}");
+				if (merchantId <= 0)
+				{
+					return false;
+				}
+
+				Casting.TrueTarget(merchantId);
+			}
+
+			TryMoveToTarget();
+			MQ.Cmd("/click right target");
+			MQ.Delay(2000, "${Merchant.ItemsReceived}");
+			return true;
+		}
 		public static void CloseMerchant()
 		{
 			bool merchantWindowOpen = MQ.Query<bool>("${Window[MerchantWnd].Open}");
@@ -1455,7 +1599,21 @@ namespace E3Core.Utility
 
 			return expected == cursorId;
 		}
+		public static bool IsRezDiaglogBoxOpen()
+		{
+			bool dialogBoxOpen = MQ.Query<bool>("${Window[ConfirmationDialogBox].Open}");
+			if(dialogBoxOpen)
+			{
+				string message = MQ.Query<string>("${Window[ConfirmationDialogBox].Child[cd_textoutput].Text}");
+				if ((message.Contains("percent)") || message.Contains("RESURRECT you.") || message.Contains(" later.")))
+				{
+					//MQ.Cmd("/nomodkey /notify ConfirmationDialogBox No_Button leftmouseup");
+					return true; //not a rez dialog box, do not accept.
+				}
+			}
 
+			return false;
+		}
 		public static bool IsActionBlockingWindowOpen()
 		{
 			var vendorOpen = MQ.Query<bool>("${Window[MerchantWnd]}");

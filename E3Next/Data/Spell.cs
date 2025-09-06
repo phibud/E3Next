@@ -217,6 +217,32 @@ namespace E3Core.Data
 							}
                         }
 					}
+					else if (value.StartsWith("ExcludedClasses|", StringComparison.OrdinalIgnoreCase))
+					{
+						string excludeClassesString = GetArgument<String>(value);
+						string[] excludeClasses = excludeClassesString.Split(',');
+
+						foreach (var eclass in excludeClasses)
+						{
+							if (!ExcludedClasses.Contains(eclass.Trim()))
+							{
+								ExcludedClasses.Add(eclass.Trim());
+							}
+						}
+					}
+					else if (value.StartsWith("ExcludedNames|", StringComparison.OrdinalIgnoreCase))
+					{
+						string excludeNamesString = GetArgument<String>(value);
+						string[] excludeNames = excludeNamesString.Split(',');
+
+						foreach (var ename in excludeNames)
+						{
+							if (!ExcludedNames.Contains(ename.Trim()))
+							{
+								ExcludedNames.Add(ename.Trim());
+							}
+						}
+					}
 					else if (value.StartsWith("CastIf|", StringComparison.OrdinalIgnoreCase))
                     {
                         CastIF = GetArgument<String>(value);
@@ -291,6 +317,27 @@ namespace E3Core.Data
                         }
 
                     }
+					else if (value.StartsWith("RecastDelay|", StringComparison.OrdinalIgnoreCase))
+					{
+						string tvalue = value;
+						bool isMinute = false;
+						if (value.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+						{
+							tvalue = tvalue.Substring(0, value.Length - 1);
+						}
+						else if (value.EndsWith("m", StringComparison.OrdinalIgnoreCase))
+						{
+							isMinute = true;
+							tvalue = tvalue.Substring(0, value.Length - 1);
+						}
+
+						RecastDelay = GetArgument<Int32>(tvalue);
+						if (isMinute)
+						{
+							RecastDelay = RecastDelay * 60;
+						}
+
+					}
 					else if (value.Equals("GoM", StringComparison.OrdinalIgnoreCase))
                     {
                         GiftOfMana = true;
@@ -552,6 +599,7 @@ namespace E3Core.Data
                 //check if this is an itemID
 
 				//we already have this data populated, just kick out
+                //used in the config editor to limit the number of calls.
 				if(ItemDataLookup.ContainsKey(CastName))
 				{
 					var SpellData = ItemDataLookup[CastName];
@@ -939,7 +987,10 @@ namespace E3Core.Data
         private const Int32 MaxTriesDefault = 5;
         public Int32 MaxTries = MaxTriesDefault;
         public Dictionary<string, Int32> CheckForCollection = new Dictionary<string, int>();
-        public Int32 Duration;
+		public HashSet<string> ExcludedClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		public HashSet<string> ExcludedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		public Int32 Duration;
         public Int32 DurationTotalSeconds;
         public Int32 RecastTime;
         public Decimal RecoveryTime;
@@ -975,6 +1026,9 @@ namespace E3Core.Data
         public Boolean Rotate;
         public Int32 EnduranceCost;
         public Int32 Delay;
+        public Int32 RecastDelay;
+        public Int64 LastCastTimeStamp;
+        public Int64 LastAssistTimeStampForCast;
         public Int32 AfterCastCompletedDelay = 0;
         public Int32 CastID;
         public Int32 MinEnd;
@@ -1069,6 +1123,7 @@ namespace E3Core.Data
 			r.Category = source.Category;
 			r.Debug = source.Debug;
 			r.Delay = source.Delay;
+            r.RecastDelay = source.RecastDelay;
 			r.AfterCastCompletedDelay = source.AfterCastCompletedDelay;
 			r.Duration = source.Duration;
 			r.DurationTotalSeconds = source.DurationTotalSeconds;
@@ -1135,6 +1190,20 @@ namespace E3Core.Data
 				if(!r.CheckForCollection.ContainsKey(entry))
 				{
 					r.CheckForCollection.Add(entry,0);
+				}
+			}
+			foreach (var entry in source.ExcludedClasses)
+			{
+				if (!r.ExcludedClasses.Contains(entry))
+				{
+					r.ExcludedClasses.Add(entry);
+				}
+			}
+			foreach (var entry in source.ExcludedNames)
+			{
+				if (!r.ExcludedNames.Contains(entry))
+				{
+					r.ExcludedNames.Add(entry);
 				}
 			}
 			r.Enabled = source.Enabled;
@@ -1219,6 +1288,7 @@ namespace E3Core.Data
             r.Category = this.Category;
             r.Debug = this.Debug;
             r.Delay = this.Delay;
+            r.RecastDelay = this.RecastDelay;
             r.AfterCastCompletedDelay = this.AfterCastCompletedDelay;
             r.Duration = this.Duration;
             r.DurationTotalSeconds = this.DurationTotalSeconds;
@@ -1281,6 +1351,9 @@ namespace E3Core.Data
 			r.CastTypeOverride = (SpellData.Types.CastingType)this.CastTypeOverride;
 			r.IfsKeys = IfsKeys;
 			r.CheckForCollection.AddRange(CheckForCollection.Keys.ToList());
+            r.ExcludedClasses.AddRange(ExcludedClasses.ToList());
+			r.ExcludedNames.AddRange(ExcludedNames.ToList());
+
 			r.Enabled = Enabled;
 			foreach (var entry in SpellEffects)
 			{
@@ -1301,6 +1374,8 @@ namespace E3Core.Data
 			d.Zone = Zone;
 			d.MinSick = MinSick;
 			d.CheckForCollection =CheckForCollection.ToDictionary(entry => entry.Key,  entry => entry.Value);
+            d.ExcludedClasses = ExcludedClasses.ToHashSet();
+            d.ExcludedNames = ExcludedNames.ToHashSet();
 			d.HealPct = HealPct;
 			d.NoInterrupt = NoInterrupt;
 			d.AfterSpell = AfterSpell;
@@ -1336,7 +1411,10 @@ namespace E3Core.Data
             string t_Zone = (Zone=="All") ? String.Empty :  $"/Zone|{Zone}";
 			string t_MinSick = (MinSick == MinSickDefault) ? String.Empty : t_MinSick = $"/MinSick|{MinSick}";
 	        string t_checkFor = (CheckForCollection.Count == 0) ? String.Empty: t_checkFor = "/CheckFor|" + String.Join(",", CheckForCollection.Keys.ToList());
-            string t_healPct = (HealPct == 0) ?String.Empty :  $"/HealPct|{HealPct}";
+            string t_excludeClasses = (ExcludedClasses.Count == 0) ? String.Empty : t_excludeClasses = "/ExcludedClasses|" + String.Join(",", ExcludedClasses.ToList());
+			string t_excludeNames = (ExcludedNames.Count == 0) ? String.Empty : t_excludeNames = "/ExcludedNames|" + String.Join(",", ExcludedNames.ToList());
+
+			string t_healPct = (HealPct == 0) ?String.Empty :  $"/HealPct|{HealPct}";
             string t_noInterrupt = (!NoInterrupt) ? String.Empty :$"/NoInterrupt";
 		    string t_AfterSpell = (String.IsNullOrWhiteSpace(this.AfterSpell)) ?String.Empty : t_AfterSpell = $"/AfterSpell|{AfterSpell}";
 			string t_BeforeSpell = (String.IsNullOrWhiteSpace(this.BeforeSpell)) ? String.Empty : t_BeforeSpell = $"/BeforeSpell|{BeforeSpell}";
@@ -1357,6 +1435,7 @@ namespace E3Core.Data
 			string t_CastTarget = (String.IsNullOrWhiteSpace(this.CastTarget) || this.IsBuff==false) ? String.Empty : $"/{CastTarget}";
 			string t_PctAggro = (PctAggro == 0) ? String.Empty : $"/PctAggro|{PctAggro}";
             string t_Delay = (Delay == 0) ? String.Empty : $"/Delay|{Delay}s";
+            string t_RecastDelay = (RecastDelay == 0) ? String.Empty : $"/RecastDelay|{RecastDelay}s";
 			string t_NoTarget = NoTarget == false ? String.Empty : $"/NoTarget";
 			string t_NoAggro = NoAggro == false ? String.Empty : $"/NoAggro";
 
@@ -1372,7 +1451,7 @@ namespace E3Core.Data
 			string t_StackCheckInterval = StackIntervalCheck == _stackIntervalCheckDefault ? String.Empty : $"/StackCheckInterval|{StackIntervalCheck/10000}";
 			string t_StackRecastDelay = StackRecastDelay == 0 ? String.Empty : $"/StackRecastDelay|{StackRecastDelay/1000}";
 
-			string returnValue = $"{CastName}{t_CastTarget}{t_GemNumber}{t_Ifs}{t_checkFor}{t_CastIF}{t_healPct}{t_healthMax}{t_noInterrupt}{t_Zone}{t_MinSick}{t_BeforeSpell}{t_AfterSpell}{t_BeforeEvent}{t_AfterEvent}{t_minMana}{t_maxMana}{t_MinEnd}{t_ignoreStackRules}{t_MinDurationBeforeRecast}{t_MaxTries}{t_Reagent}{t_CastTypeOverride}{t_PctAggro}{t_Delay}{t_NoTarget}{t_NoAggro}{t_AfterEventDelay}{t_AfterSpellDelay}{t_BeforeEventDelay}{t_BeforeSpellDelay}{t_AfterCastDelay}{t_AfterCastCompletedDelay}{t_SongRefreshTime}{t_StackRequestItem}{t_StackRequestTargets}{t_StackCheckInterval}{t_StackRecastDelay}{t_Enabled}";
+			string returnValue = $"{CastName}{t_CastTarget}{t_GemNumber}{t_Ifs}{t_checkFor}{t_CastIF}{t_healPct}{t_healthMax}{t_noInterrupt}{t_Zone}{t_MinSick}{t_BeforeSpell}{t_AfterSpell}{t_BeforeEvent}{t_AfterEvent}{t_minMana}{t_maxMana}{t_MinEnd}{t_ignoreStackRules}{t_MinDurationBeforeRecast}{t_MaxTries}{t_Reagent}{t_CastTypeOverride}{t_PctAggro}{t_Delay}{t_RecastDelay}{t_NoTarget}{t_NoAggro}{t_AfterEventDelay}{t_AfterSpellDelay}{t_BeforeEventDelay}{t_BeforeSpellDelay}{t_AfterCastDelay}{t_AfterCastCompletedDelay}{t_SongRefreshTime}{t_StackRequestItem}{t_StackRequestTargets}{t_StackCheckInterval}{t_StackRecastDelay}{t_excludeClasses}{t_excludeNames}{t_Enabled}";
 			return returnValue;
 
 		}

@@ -30,6 +30,7 @@ namespace E3Core.Processors
 		public static bool IsPaused = false;
 		[ExposedData("Basics", "GroupMembers")]
 		public static List<int> GroupMembers = new List<int>();
+        public static List<string> GroupMemberNames = new List<string>();
         private static long _nextGroupCheck = 0;
         private static long _nextGroupCheckInterval = 3000;
 		private static long _nextAutoHaterFixCheck = 0;
@@ -200,7 +201,7 @@ namespace E3Core.Processors
 			//_enableXTargetFix
 
 
-			EventProcessor.RegisterCommand("/e3xtargetfix", (x) =>
+			EventProcessor.RegisterCommand("/e3bugs_xtargetfix", (x) =>
 			{
 				//swap them
 				e3util.ToggleBooleanSetting(ref _enableXTargetFix, "Enable XTargetFix", x.args);
@@ -346,7 +347,7 @@ namespace E3Core.Processors
                 Assist.Reset();
                 Pets.Reset();
                 Nukes.Reset();
-                BuffCheck.AddToBuffCheckTimer(2000);
+                BuffCheck.AddToBuffCheckTimer(5000);
 				
 				//clear out the timers as the ID's are no longer valid
                 BuffCheck.Reset();
@@ -413,7 +414,7 @@ namespace E3Core.Processors
 					else
 					{
 						string user = x.match.Groups[1].Value;
-
+						MQ.Cmd($"/notify RaidWindow Raid_UnlockButton leftmouseup");
 						//need to be in the same zone
 						if (_spawns.TryByName(user, out var s))
 						{
@@ -525,6 +526,7 @@ namespace E3Core.Processors
            	EventProcessor.RegisterCommand("/e3echo", (x) =>
 			{
                 string argumentLine = e3util.ArgsToCommand(x.args);
+                argumentLine = argumentLine.Replace("$\\{", "${");
                 string processedLine = Casting.Ifs_Results(argumentLine);
 				MQ.Cmd($"/echo {processedLine}");
 				MQ.Cmd($"/varset E3N_var {processedLine}");
@@ -742,7 +744,7 @@ namespace E3Core.Processors
             {
                 List<string> validReportChannels = new List<string>() { "/g", "/gu", "/say", "/rsay","/gsay", "/rs" };
 
-                string channel = "/gu";
+                string channel = "/gsay";
                 if(x.args.Count>0 && validReportChannels.Contains(x.args[0], StringComparer.OrdinalIgnoreCase))
                 {
 
@@ -875,10 +877,10 @@ namespace E3Core.Processors
 				if (x.args.Count > 0)
 				{
 					int targetid = MQ.Query<int>("${Target.ID}");
-					if (targetid > 0)
+					//if (targetid > 0)
 					{
-						Spawn s;
-						if (_spawns.TryByID(targetid, out s))
+						//Spawn spawn;
+						//if (_spawns.TryByID(targetid, out spawn))
 						{
 							System.Text.StringBuilder sb = new StringBuilder();
 							bool first = true;
@@ -912,6 +914,7 @@ namespace E3Core.Processors
 							}
 						}
 					}
+                    
 				}
 			});
 			EventProcessor.RegisterCommand("/e3bark-send", (x) =>
@@ -929,11 +932,11 @@ namespace E3Core.Processors
 					int targetid;
 					if (int.TryParse(x.args[0], out targetid))
 					{
-						if (targetid > 0)
+						//if (targetid > 0)
 						{
 
 							Spawn s;
-							if (_spawns.TryByID(targetid, out s))
+							//if (_spawns.TryByID(targetid, out s))
 							{
 								if (e3util.IsEQLive())
 								{
@@ -941,7 +944,7 @@ namespace E3Core.Processors
 									MQ.Delay(E3.Random.Next(100, 1000));
 
 								}
-								Casting.TrueTarget(targetid);
+                                if(targetid>0) Casting.TrueTarget(targetid);
 								MQ.Delay(100);
                                 
                                 if (MQ.Query<bool>("${Me.Sneaking}"))
@@ -1163,7 +1166,7 @@ namespace E3Core.Processors
                 }
                 else if (string.Equals(x.args[0], "Laz", StringComparison.OrdinalIgnoreCase))
                 {
-                    Process.Start(new ProcessStartInfo { FileName = "https://www.lazaruseq.com/Wiki/index.php/Main_Page", UseShellExecute = true });
+                    Process.Start(new ProcessStartInfo { FileName = "https://www.lazaruseq.com/", UseShellExecute = true });
                 }
 				else if (string.Equals(x.args[0], "Ret", StringComparison.OrdinalIgnoreCase))
 				{
@@ -1182,6 +1185,7 @@ namespace E3Core.Processors
             int groupCount = MQ.Query<int>("${Group}");
             groupCount++;
             GroupMembers.Clear();
+            GroupMemberNames.Clear();
             //refresh group members.
             
             for (int i = 0; i < groupCount; i++)
@@ -1189,9 +1193,13 @@ namespace E3Core.Processors
                 int id = MQ.Query<int>($"${{Group.Member[{i}].ID}}");
                 if(id>0)
                 {
-                    GroupMembers.Add(id);
+                    string name = MQ.Query<string>($"${{Group.Member[{i}].Name}}");
+					GroupMembers.Add(id);
+                    GroupMemberNames.Add(name);
                 }
             }
+
+
         }
 
 		/// <summary>
@@ -1544,10 +1552,8 @@ namespace E3Core.Processors
 
             if(e3util.IsEQEMU() && E3.ServerName=="Lazarus")
             {
-                if(LazarusManaRecovery())
-                {
-                    return;
-                }
+                LazarusManaRecovery();
+                
             }
 
             using (_log.Trace())

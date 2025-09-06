@@ -180,14 +180,12 @@ namespace E3Core.Processors
         {
 
             Int32 targetId = MQ.Query<Int32>("${Target.ID}");
-            if (Assist.AssistTargetID > 0)
+			if (Assist.AssistTargetID > 0 && targetId != Assist.AssistTargetID && e3util.IsManualControl())
+			{
+				return;
+			}
+			if (Assist.AssistTargetID > 0)
             {
-                //person in manual control and they are not on the assist target, chill.
-
-                if (targetId != Assist.AssistTargetID && e3util.IsManualControl())
-                {
-                    return;
-                }
                 CastLongTermSpell(Assist.AssistTargetID, E3.CharacterSettings.Debuffs_OnAssist, _debuffdotTimers);
                 if (E3.ActionTaken) return;
             }
@@ -226,7 +224,14 @@ namespace E3Core.Processors
         public static void check_Dots()
         {
             Int32 targetId = MQ.Query<Int32>("${Target.ID}");
-            if (Assist.AssistTargetID > 0)
+
+			//person in manual control and they are not on the assist target, chill.
+			if (Assist.AssistTargetID > 0 && targetId != Assist.AssistTargetID && e3util.IsManualControl())
+			{
+				return;
+			}
+
+			if (Assist.AssistTargetID > 0)
             {
                 //person in manual control and they are not on the assist target, chill.
                
@@ -242,12 +247,7 @@ namespace E3Core.Processors
 				if (!e3util.ShouldCheck(ref _nextDoTCheck, _nextDoTCheckInterval)) return;
 			}
 			// e3util.PrintTimerStatus(_dotTimers, ref _nextDoTCheck, "Damage over Time");
-			//person in manual control and they are not on the assist target, chill.
-
-			if (Assist.AssistTargetID > 0 && targetId != Assist.AssistTargetID && e3util.IsManualControl())
-			{
-				return;
-			}
+		
 			//using (_log.Trace())
 			{
                 try

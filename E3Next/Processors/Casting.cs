@@ -129,7 +129,8 @@ namespace E3Core.Processors
 					AfterEventCheck(spell);
 					UpdateAAInCooldown(spell);
 					E3.ActionTaken = true;
-
+					spell.LastCastTimeStamp = Core.StopWatch.ElapsedMilliseconds;
+					spell.LastAssistTimeStampForCast = Assist.LastAssistStartedTimeStamp;
 					///allow the player to 'tweak' this value.
 					if (E3.CharacterSettings.Misc_DelayAfterCastWindowDropsForSpellCompletion > 0)
 					{
@@ -139,6 +140,7 @@ namespace E3Core.Processors
 					{
 						MQ.Delay(spell.AfterCastCompletedDelay);
 					}
+					
 					return CastReturn.CAST_SUCCESS;
 				}
 				//bard can cast insta cast items while singing, they be special.
@@ -170,6 +172,8 @@ namespace E3Core.Processors
 							BeforeEventCheck(spell);
 							MQ.Write($"\ag{spell.CastName} \am{targetName} \ao{targetID}");
 							MQ.Cmd($"/doability \"{spell.CastName}\"");
+							spell.LastCastTimeStamp = Core.StopWatch.ElapsedMilliseconds;
+							spell.LastAssistTimeStampForCast = Assist.LastAssistStartedTimeStamp;
 							if (!E3.CharacterSettings.Misc_EnchancedRotationSpeed) MQ.Delay(300);
 							if (spell.AfterCastCompletedDelay > 0)
 							{
@@ -183,6 +187,8 @@ namespace E3Core.Processors
 						{
 							BeforeEventCheck(spell);
 							MQ.Cmd($"/alt activate {spell.CastID}");
+							spell.LastCastTimeStamp = Core.StopWatch.ElapsedMilliseconds;
+							spell.LastAssistTimeStampForCast = Assist.LastAssistStartedTimeStamp;
 							if (!E3.CharacterSettings.Misc_EnchancedRotationSpeed) MQ.Delay(300);
 							UpdateAAInCooldown(spell);
 							if (spell.AfterCastCompletedDelay > 0)
@@ -198,6 +204,8 @@ namespace E3Core.Processors
 							BeforeEventCheck(spell);
 							//else its an item
 							MQ.Cmd($"/useitem \"{spell.CastName}\"", 300);
+							spell.LastCastTimeStamp = Core.StopWatch.ElapsedMilliseconds;
+							spell.LastAssistTimeStampForCast = Assist.LastAssistStartedTimeStamp;
 							UpdateItemInCooldown(spell);
 							if (spell.AfterCastCompletedDelay > 0)
 							{
@@ -278,6 +286,14 @@ namespace E3Core.Processors
 								Interrupt();
 								if (!IsCasting()) return CastReturn.CAST_INTERRUPTED;
 							}
+
+
+						}
+						if (EventProcessor.CommandListQueueHasCommand("/throne"))
+						{
+							EventProcessor.ProcessEventsInQueues("/throne");
+							Interrupt();
+							if (!IsCasting()) return CastReturn.CAST_INTERRUPTED;
 
 
 						}
@@ -707,7 +723,8 @@ namespace E3Core.Processors
 						}
 
 					startCasting:
-
+						spell.LastCastTimeStamp = Core.StopWatch.ElapsedMilliseconds;
+						spell.LastAssistTimeStampForCast = Assist.LastAssistStartedTimeStamp;
 						//in case a spell was interrupted before this one, clear anything out.
 						ClearInterruptChecks();
 
@@ -1314,6 +1331,11 @@ namespace E3Core.Processors
 		}
 		public static bool MemorizeSpell(Data.Spell spell,bool ignoreWait=false)
 		{
+
+			//don't try and mem a spell if you are max aggro on anything as it will auto crit you.
+			if (Basics.InCombat() && (E3.CurrentClass & Data.Class.Tank) == E3.CurrentClass) return false;
+			if (e3util.GetXtargetMaxAggro() == 100) return false;
+
 		
 			if (!(spell.CastType == CastingType.Spell && spell.SpellInBook))
 			{
@@ -1699,6 +1721,27 @@ namespace E3Core.Processors
 		public static Boolean CheckReady(Data.Spell spell, bool skipCastCheck = false, bool skipGCDCheck=false)
 		{
 			if (spell == null) return false;
+
+			if (spell.RecastDelay>0)
+			{
+				if(spell.LastAssistTimeStampForCast!=Assist.LastAssistStartedTimeStamp)
+				{
+					//different time stamp for an assist, we can zero out the lastcastimetamp
+					//this will get set on the next cast
+					spell.LastCastTimeStamp = 0;
+				}
+
+				//if a timestamp was set			
+				if(spell.LastCastTimeStamp>0)
+				{
+					if ((Core.StopWatch.ElapsedMilliseconds - spell.LastCastTimeStamp) < spell.RecastDelay)
+					{
+						return false;
+					}
+				}
+			}
+
+			
 			if (!spell.Enabled) return false;
 			if (!spell.Initialized) spell.ReInit();
 

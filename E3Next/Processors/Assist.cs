@@ -125,6 +125,7 @@ namespace E3Core.Processors
             Casting.ResetResistCounters();
             //put them back in their object pools
             DebuffDot.Reset();
+			Dispel.Reset();
 			Burns.Reset();
             AssistOff();
          
@@ -522,7 +523,8 @@ namespace E3Core.Processors
                 Casting.ResetResistCounters();
                 //put them back in their object pools
                 DebuffDot.Reset();
-                Burns.Reset();
+				Dispel.Reset();
+				Burns.Reset();
             }
             LastAssistEndedTimestamp = Core.StopWatch.ElapsedMilliseconds;
 
@@ -834,8 +836,6 @@ namespace E3Core.Processors
                    ignoreme = true;
                    x.args.Remove("/ignoreme");
                }
-
-              
                //Rez.Reset();
                if (x.args.Count == 0)
                {
@@ -910,73 +910,7 @@ namespace E3Core.Processors
                }
            });
 
-            EventProcessor.RegisterCommand("/cleartargets", (x) =>
-            {
-                ClearXTargets.FaceTarget = true;
-                ClearXTargets.StickTarget = false;
-
-                if (x.args.Count == 0)
-                {
-                    ClearXTargets.MobToAttack = 0;
-                    AssistOff();
-                    E3.Bots.BroadcastCommandToGroup($"/backoff all",x);
-					ClearXTargets.Filters.Clear();
-					if (x.filters.Count > 0)
-                    {
-                        ClearXTargets.Filters.Clear();
-                        ClearXTargets.Filters.AddRange(x.filters);
-                    }
-                    ClearXTargets.HasAllFlag = x.hasAllFlag;
-                    ClearXTargets.Enabled = true;
-                    ClearXTargets.FaceTarget = true;
-                    ClearXTargets.StickTarget = false;
-					ClearXTargets.UseMyTarget = false;
-
-                }
-                else if (x.args.Count == 1 && x.args[0] == "off")
-                {
-                    AssistOff();
-                    ClearXTargets.Enabled = false;
-                    ClearXTargets.Filters.Clear();
-                    ClearXTargets.HasAllFlag = false;
-                    E3.Bots.BroadcastCommandToGroup($"/backoff all",x);
-                }
-                else if (x.args.Count >= 1)
-                {
-                    ClearXTargets.MobToAttack = 0;
-                    AssistOff();
-                    E3.Bots.BroadcastCommandToGroup($"/backoff all", x);
-                    if (x.filters.Count > 0)
-                    {
-                        ClearXTargets.Filters.Clear();
-                        ClearXTargets.Filters.AddRange(x.filters);
-                    }
-                    ClearXTargets.HasAllFlag = x.hasAllFlag;
-					ClearXTargets.UseMyTarget = false;
-					ClearXTargets.FaceTarget = true;
-					ClearXTargets.StickTarget = false;
-
-					foreach (var argValue in x.args)
-                    {
-                        if (argValue.Equals("noface", StringComparison.OrdinalIgnoreCase))
-                        {
-                            ClearXTargets.FaceTarget = false;
-                        }
-                        else if (argValue.Equals("stick", StringComparison.OrdinalIgnoreCase))
-                        {
-                            ClearXTargets.StickTarget = true;
-                        }
-						else if (argValue.Equals("usemytarget", StringComparison.OrdinalIgnoreCase))
-						{
-							ClearXTargets.UseMyTarget = true;
-						}
-					}
-
-                    ClearXTargets.Enabled = true;
-
-                }
-
-            });
+            
             EventProcessor.RegisterCommand("/assisttype", (x) =>
             {
 
@@ -994,11 +928,12 @@ namespace E3Core.Processors
                 else if (x.args.Count == 1)
                 {
                     string assisttype = x.args[0];
-                    if (_meleeTypes.Contains(assisttype, StringComparer.OrdinalIgnoreCase) || _rangeTypes.Contains(assisttype, StringComparer.OrdinalIgnoreCase))
+                    if (_meleeTypes.Contains(assisttype, StringComparer.OrdinalIgnoreCase) || _rangeTypes.Contains(assisttype, StringComparer.OrdinalIgnoreCase) || assisttype.ToLower()=="off")
                     {
                         E3.CharacterSettings.Assist_Type = assisttype;
                         E3.Bots.Broadcast("\agChanging assist type to :\ao" + assisttype);
                     }
+
                 }
 
             });
@@ -1010,9 +945,11 @@ namespace E3Core.Processors
                     {
                         Casting.Interrupt();
                     }
+					ClearXTargets.Enabled = false;
                     AssistOff();
                     Burns.Reset();
                     DebuffDot.Reset();
+                    Dispel.Reset();
                     Movement.AcquireFollow();
 
                 }
@@ -1032,7 +969,8 @@ namespace E3Core.Processors
                     AssistOff();
                     Burns.Reset();
                     DebuffDot.Reset();
-                    Movement.AcquireFollow();
+				    Dispel.Reset();
+				    Movement.AcquireFollow();
 
             });
 

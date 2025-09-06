@@ -19,6 +19,20 @@ namespace E3NextConfigEditor.Models
 		
 		}
 		[Category("Spell Data")]
+		[Description("Spell Type")]
+		public string SpellType
+		{
+			get { return _spell.SpellType; }
+
+		}
+		[Category("Spell Data")]
+		[Description("Spell Target Type")]
+		public string TargetType
+		{
+			get { return _spell.TargetType; }
+
+		}
+		[Category("Spell Data")]
 		[Description("Spell Name")]
 		public string SpellName
 		{
@@ -224,6 +238,48 @@ namespace E3NextConfigEditor.Models
 				else
 				{
 					_spell.CheckForCollection.Clear();
+				}
+			}
+		}
+		[Description("Class short name, comma seperated. Classes to exclude in your buff if your using GBots/Bots")]
+		public string ExcludedClasses
+		{
+			get { return String.Join(",", _spell.ExcludedClasses.ToList()); }
+			set
+			{
+				if (!String.IsNullOrWhiteSpace(value))
+				{
+					string[] splitArray = value.Split(',');
+					_spell.ExcludedClasses.Clear();
+					foreach (var spell in splitArray)
+					{
+						_spell.ExcludedClasses.Add(spell);
+					}
+				}
+				else
+				{
+					_spell.ExcludedClasses.Clear();
+				}
+			}
+		}
+		[Description("Toon Name, comma seperated. Names to exclude in your buff if your using GBots/Bots")]
+		public string ExcludedNames
+		{
+			get { return String.Join(",", _spell.ExcludedNames.ToList()); }
+			set
+			{
+				if (!String.IsNullOrWhiteSpace(value))
+				{
+					string[] splitArray = value.Split(',');
+					_spell.ExcludedNames.Clear();
+					foreach (var spell in splitArray)
+					{
+						_spell.ExcludedNames.Add(spell);
+					}
+				}
+				else
+				{
+					_spell.ExcludedNames.Clear();
 				}
 			}
 		}
@@ -458,6 +514,20 @@ namespace E3NextConfigEditor.Models
 
 		}
 		[Category("Spell Data")]
+		[Description("Spell Type")]
+		public string SpellType
+		{
+			get { return _spell.SpellType; }
+
+		}
+		[Category("Spell Data")]
+		[Description("Spell Target Type")]
+		public string TargetType
+		{
+			get { return _spell.TargetType; }
+
+		}
+		[Category("Spell Data")]
 		[Description("Spell Name")]
 		public string SpellName
 		{
@@ -644,6 +714,27 @@ namespace E3NextConfigEditor.Models
 				else
 				{
 					_spell.CheckForCollection.Clear();
+				}
+			}
+		}
+		[Description("Class short name, comma seperated. Classes to exclude in your buff if your using GBots/Bots")]
+		public string ExcludedClasses
+		{
+			get { return String.Join(",", _spell.ExcludedClasses.ToList()); }
+			set
+			{
+				if (!String.IsNullOrWhiteSpace(value))
+				{
+					string[] splitArray = value.Split(',');
+					_spell.ExcludedClasses.Clear();
+					foreach (var spell in splitArray)
+					{
+						_spell.ExcludedClasses.Add(spell);
+					}
+				}
+				else
+				{
+					_spell.ExcludedClasses.Clear();
 				}
 			}
 		}

@@ -4,11 +4,7 @@ using E3Core.Utility;
 using MonoCore;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+
 
 namespace E3Core.Processors
 {
@@ -70,18 +66,9 @@ namespace E3Core.Processors
             if (e3util.IsEQLive()) return;
             if (Basics.InCombat()) return;
 
-            if (MQ.Query<bool>("${Window[ConfirmationDialogBox].Open}"))
+            if (e3util.IsRezDiaglogBoxOpen())
             {
-
                 MQ.Delay(1000);
-
-                //check if its a valid confirmation box
-                string message = MQ.Query<string>("${Window[ConfirmationDialogBox].Child[cd_textoutput].Text}");
-                if (!(message.Contains("percent)")||message.Contains("RESURRECT you.") || message.Contains(" later.")))
-                {
-                    //MQ.Cmd("/nomodkey /notify ConfirmationDialogBox No_Button leftmouseup");
-                    return; //not a rez dialog box, do not accept.
-                }
                 MQ.Cmd("/nomodkey /notify ConfirmationDialogBox Yes_Button leftmouseup",2000);//start zone
                     
                 //zone may to happen
@@ -104,7 +91,7 @@ namespace E3Core.Processors
                 Casting.TrueTarget(corpseID);
 
                 //check if its rezable.
-                if (!CanRez())
+                if (!CanRez(corpseID))
                 {
 					MQ.Cmd("/corpse",1000);
                         
@@ -200,6 +187,7 @@ namespace E3Core.Processors
         {
               //lets get a corpse list
             _corpseList.Clear();
+            _canRezCache.Clear();
 
             foreach (var kvp in _recentlyRezzed)
             {
@@ -346,114 +334,76 @@ namespace E3Core.Processors
 
             //don't rez if we cannot rez.
             if (_currentRezSpells.Count == 0) return;
-            foreach (var corpse in _corpseList)
-            {
-                if (_spawns.TryByID(corpse, out var spawn))
-                {
-                    if (_recentlyRezzed.TryGetValue(corpse, out var lastRez))
-                    {
-                        // if < 1 minute since last rez attempt, skip
-                        if (DateTime.Now - lastRez < new TimeSpan(0, 1, 0))
-                        {
-                            //E3.Bots.Broadcast($"\agSkipping {spawn.CleanName}'s corpse because i rezzed it < 1 minute ago");
-                            continue; 
-                        }
-                        else
-                        {
-                            _recentlyRezzed.Remove(corpse);
-                        }
-                    }
-                    EventProcessor.ProcessEventsInQueues("/wipe");
-                    EventProcessor.ProcessEventsInQueues("/wipe all");
-                    EventProcessor.ProcessEventsInQueues("/autorezon");
-                    EventProcessor.ProcessEventsInQueues("/autorezon all");
-                    if (_skipAutoRez) return;
-                    if (Basics.AmIDead()) return;
-                    // only care about group or raid members
-                    var inGroup = MQ.Query<bool>($"${{Group.Member[{spawn.DisplayName}]}}");
-                    var inRaid = MQ.Query<bool>($"${{Raid.Member[{spawn.DisplayName}]}}");
+			
+            foreach (var spell in _currentRezSpells)
+			{
+				if (Casting.CheckMana(spell) && Casting.CheckReady(spell))
+				{
+					if (!String.IsNullOrWhiteSpace(spell.Ifs))
+					{
+						if (!Casting.Ifs(spell))
+						{
+							continue;
+						}
+					}
+				
+					foreach (var corpse in _corpseList)
+					{
+						if (_spawns.TryByID(corpse, out var spawn))
+						{
+							EventProcessor.ProcessEventsInQueues("/wipe");
+							EventProcessor.ProcessEventsInQueues("/wipe all");
+							EventProcessor.ProcessEventsInQueues("/autorezon");
+							EventProcessor.ProcessEventsInQueues("/autorezon all");
+							if (_skipAutoRez) return;
+							if (Basics.AmIDead()) return;
 
-                    if (!inGroup && !inRaid)
-                    {
-                        continue;
-                    }
-                    //if not a cleric, and the person is in raid but no in group, let clerics deal with it.
-                    if (E3.CurrentClass != Class.Cleric && inRaid && !inGroup)
-                    {
-                        continue;
-                    }
-
-                    if (Basics.InCombat() && (E3.CurrentClass & Class.Priest) == E3.CurrentClass)
-                    {
-                        var currentMana = MQ.Query<int>("${Me.CurrentMana}");
-                        var pctMana = MQ.Query<int>("${Me.PctMana}");
-                        if (Heals.SomeoneNeedsHealing(null,currentMana, pctMana))
-                        {
-                            return;
-                        }
-                    }
-
-                    if (Casting.TrueTarget(spawn.ID))
-                    {
-                        if (!CanRez())
-                        {
-                            _recentlyRezzed.Add(spawn.ID, DateTime.Now);
-                            continue;
-                        }
-                        InitRezSpells(RezType.Auto);
-                        if (_currentRezSpells.Count == 0) return;
-                       	
-                      
-		
-                        // if it's a cleric or warrior corpse and we're in combat, try to use divine res
-                        if (Basics.InCombat() && _divineRes.CastType == CastingType.AA && _classesToDivineRez.Contains(spawn.ClassName))
-                        {
-                            if(Casting.CheckReady(_divineRes))
-                            {
-								var result = Casting.Cast(spawn.ID, _divineRes);
-								if (result == CastReturn.CAST_INTERRUPTFORHEAL) return;
-								if (result == CastReturn.CAST_SUCCESS)
-								{
-									E3.Bots.Broadcast($"Trying to rez {spawn.DisplayName}");
-									MQ.Cmd("/corpse");
-									Casting.Cast(spawn.ID, _divineRes);
-									break;
-								}
-							}
-                        	
-                        }
-                        
-                        foreach (var spell in _currentRezSpells)
-                        {
-							if (!String.IsNullOrWhiteSpace(spell.Ifs))
+							if (_recentlyRezzed.TryGetValue(corpse, out var lastRez))
 							{
-								if (!Casting.Ifs(spell))
+								// if < 1 minute since last rez attempt, skip
+								if (DateTime.Now - lastRez < new TimeSpan(0, 1, 0))
 								{
 									continue;
 								}
 							}
 
-							if (Casting.CheckMana(spell) && Casting.CheckReady(spell))
-                            {
-                                if (Basics.InCombat())
-                                {
-                                    if (string.Equals(spell.SpellName, "Water Sprinkler of Nem Ankh"))
-                                    {
-                                        continue;
-                                    }
-									E3.Bots.Broadcast($"Trying to rez {spawn.DisplayName}");
-									MQ.Cmd("/corpse");
-									var result = Casting.Cast(spawn.ID, spell);
-									if (result == CastReturn.CAST_INTERRUPTFORHEAL) return;
-									if (result == CastReturn.CAST_SUCCESS)
-                                    {
-										_recentlyRezzed.Add(spawn.ID, DateTime.Now);
-										break;
+							// only care about group or raid members
+							var inGroup = MQ.Query<bool>($"${{Group.Member[{spawn.DisplayName}]}}");
+							var inRaid = MQ.Query<bool>($"${{Raid.Member[{spawn.DisplayName}]}}");
+                            var inZone = _spawns.TryByName(spawn.DisplayName, out _);
 
-									}
-								
+                            //don't auto rez if in zone.
+                            if (inZone) continue;
+
+							if (!inGroup && !inRaid)
+							{
+								continue;
+							}
+
+							string spawnsCleanName = spawn.CleanName.Replace("'s corpse", "");
+							if (!String.IsNullOrEmpty(spell.CastTarget))
+							{
+								if (!String.Equals(spell.CastTarget, spawnsCleanName, StringComparison.OrdinalIgnoreCase)) continue;
+							}
+							//before we try and target/consider, lets make sure noone needs heals.
+							if (Basics.InCombat() && (E3.CurrentClass & Class.Priest) == E3.CurrentClass)
+							{
+								var currentMana = MQ.Query<int>("${Me.CurrentMana}");
+								var pctMana = MQ.Query<int>("${Me.PctMana}");
+								if (Heals.SomeoneNeedsHealing(null, currentMana, pctMana))
+								{
+									return;
 								}
-                                else
+							}
+							if (Casting.TrueTarget(spawn.ID))
+							{
+                                //this can take a bit of time, thus if it fails, we add to recently rezed.
+								if (!CanRez(spawn.ID))
+								{
+									_recentlyRezzed.Add(spawn.ID, DateTime.Now);
+									continue;
+								}
+								if (Basics.InCombat())
 								{
 									E3.Bots.Broadcast($"Trying to rez {spawn.DisplayName}");
 									MQ.Cmd("/corpse");
@@ -465,33 +415,58 @@ namespace E3Core.Processors
 										break;
 									}
 								}
-                             }
-                        }
-                    }
-                }
-            }
+								else
+								{
+									E3.Bots.Broadcast($"Trying to rez {spawn.DisplayName}");
+									MQ.Cmd("/corpse");
+									var result = Casting.Cast(spawn.ID, spell, null, true, true);
+									if (result == CastReturn.CAST_INTERRUPTFORHEAL) return;
+									if (result == CastReturn.CAST_SUCCESS)
+									{
+										_recentlyRezzed.Add(spawn.ID, DateTime.Now);
+										break;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
         }
-
-        public static bool CanRez()
+        public static Dictionary<Int32,bool> _canRezCache = new Dictionary<Int32,bool>();
+        public static bool CanRez(Int32 corpseID)
         {
-            MQ.Cmd("/consider",1500);
-            
-            //check for the event.
-            if(HasEventItem("CanRez"))
+
+            if(_canRezCache.ContainsKey(corpseID))
             {
-                //its rezable
-                return true;
+                return _canRezCache[corpseID];
             }
-            else if(HasEventItem("CanNotRez"))
+			if(Casting.TrueTarget(corpseID))
             {
-                return false;
-            }
-            else
-            {
-                //dunno, error?
-                E3.Bots.Broadcast("\agWaitForRez:\arERROR! \atUnsure if we can loot, assuming no.");
-                return true;
-            }
+				MQ.Cmd("/consider", 1000);
+
+				//check for the event.
+				if (HasEventItem("CanRez"))
+				{
+
+					_canRezCache.Add(corpseID, true);
+					//its rezable
+					return true;
+				}
+				else if (HasEventItem("CanNotRez"))
+				{
+					_canRezCache.Add(corpseID, false);
+					return false;
+				}
+				else
+				{
+					//dunno, error?
+					E3.Bots.Broadcast("\agWaitForRez:\arERROR! \atUnsure if we can loot, assuming no.");
+					return true;
+				}
+			}
+
+            return false;
         }
 
         public static void TurnOffAutoRezSkip()
@@ -535,7 +510,7 @@ namespace E3Core.Processors
 
 					foreach (var spell in _currentRezSpells)
                     {
-                        if (CanRez() && Casting.CheckMana(spell) && Casting.CheckReady(spell))
+                        if (CanRez(s.ID) && Casting.CheckMana(spell) && Casting.CheckReady(spell))
                         {
                             E3.Bots.Broadcast($"Rezing {s.DisplayName}");
                             Casting.Cast(s.ID, spell);
@@ -578,7 +553,7 @@ namespace E3Core.Processors
                 if (_spawns.TryByID(corpseid, out s))
                 {
                     Casting.TrueTarget(s.ID);
-                    if (!CanRez())
+                    if (!CanRez(s.ID))
                     {
                         // still add it anyway so we don't keep trying to rez unrezzable things
                         corpsesRaised.Add(s.ID);
@@ -605,8 +580,8 @@ namespace E3Core.Processors
 						{
 							E3.Bots.Broadcast($"Trying to rez {s.DisplayName}");
 							MQ.Cmd("/corpse");
-
-							var result = Casting.Cast(s.ID, spell);
+                            //rez, don't care about anything else.
+							var result = Casting.Cast(s.ID, spell,null,true,true);
 							if (result == CastReturn.CAST_INTERRUPTFORHEAL) return;
 							if (result == CastReturn.CAST_SUCCESS)
 							{
@@ -666,24 +641,13 @@ namespace E3Core.Processors
         private static void InitRezSpells(RezType rezType = RezType.Normal)
         {
             _currentRezSpells.Clear();
-            List<String> spellList = E3.CharacterSettings.Rez_RezSpells;
-
+            List<Spell> spellList = E3.CharacterSettings.Rez_RezSpells;
             if(rezType== RezType.Auto) spellList= E3.CharacterSettings.Rez_AutoRezSpells;
-
-            foreach (var spellName in spellList)
+            foreach (var spell in spellList)
             {
                 //if (MQ.Query<bool>($"${{FindItem[={spellName}]}}") || MQ.Query<bool>($"${{Me.AltAbility[{spellName}]}}") || MQ.Query<bool>($"${{Me.Book[{spellName}]}}"))
                 {
-                    Data.Spell s;
-                    if(!Spell.LoadedSpellsByName.TryGetValue(spellName,out s))
-                    {
-                        s = new Spell(spellName);
-                    }
-                    if(s.CastType!= CastingType.None)
-                    {
-                        _currentRezSpells.Add(s);
-
-                    }
+                   _currentRezSpells.Add(spell);
                 }
             }
         }

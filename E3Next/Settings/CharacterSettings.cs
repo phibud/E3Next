@@ -265,6 +265,14 @@ namespace E3Core.Settings
 		[INI_Section("Pets", "Pet Summon Combat (On/Off)")]
 		public bool Pet_SummonCombat;
 
+		//Alerts
+		[INI_Section("Alerts", "Damage Messages(On/Off)")]
+		public bool Alerts_DamageMessages = true;
+		[INI_Section("Alerts", "Rampage Messages(On/Off)")]
+		public bool Alerts_RampageMessages = true;
+		[INI_Section("Alerts", "Reflect Messages(On/Off)")]
+		public bool Alerts_ReflectMessages = true;
+
 		//debuffs
 		[INI_Section("Debuffs", "Debuff on Assist")]
 		public List<Spell> Debuffs_OnAssist = new List<Spell>();
@@ -293,6 +301,8 @@ namespace E3Core.Settings
 		public List<Spell> CureAll = new List<Spell>();
 		[INI_Section("Cures", "RadiantCure")]
 		public List<Spell> RadiantCure = new List<Spell>();
+		[INI_Section("Cures", "RadiantCureSpells")]
+		public List<Spell> RadiantCureSpells = new List<Spell>();
 		[INI_Section("Cures", "CurseCounters")]
 		public List<Spell> CurseCounterCure = new List<Spell>();
 		[INI_Section("Cures", "CurseCountersIgnore")]
@@ -309,7 +319,7 @@ namespace E3Core.Settings
 		public List<Spell> DiseaseCounterCure = new List<Spell>();
 		[INI_Section("Cures", "DiseaseCountersIgnore")]
 		public List<Spell> DiseaseCounterIgnore = new List<Spell>();
-
+		
 
 		//life support
 		[INI_Section("Life Support", "Life Support")]
@@ -404,9 +414,9 @@ namespace E3Core.Settings
 
 		//rez spells
 		[INI_Section("Rez", "Auto Rez Spells")]
-		public List<string> Rez_AutoRezSpells = new List<string>();
+		public List<Spell> Rez_AutoRezSpells = new List<Spell>();
 		[INI_Section("Rez", "Rez Spells")]
-		public List<string> Rez_RezSpells = new List<string>();
+		public List<Spell> Rez_RezSpells = new List<Spell>();
 		[INI_Section("Rez", "AutoRez")]
 		public bool Rez_AutoRez = false;
 
@@ -634,6 +644,11 @@ namespace E3Core.Settings
 			LoadKeyData("Misc", "If FD stay down (true/false)", ParsedData, ref IfFDStayDown);
 			LoadKeyData("Misc", "Debuffs/Dots are visible", ParsedData, ref Misc_VisibleDebuffsDots);
 			LoadKeyData("Misc", "Enhanced rotation speed", ParsedData, ref Misc_EnchancedRotationSpeed);
+
+			LoadKeyData("Alerts", "Rampage Messages(On/Off)", ParsedData, ref Alerts_RampageMessages);
+			LoadKeyData("Alerts", "Damage Messages(On/Off)", ParsedData, ref Alerts_DamageMessages);
+			LoadKeyData("Alerts", "Reflect Messages(On/Off)", ParsedData, ref Alerts_ReflectMessages);
+
 
 			LoadKeyData("Manastone", "Override General Settings (On/Off)", ParsedData, ref Manastone_OverrideGeneralSettings);
             LoadKeyData("Manastone", "Manastone Enabled (On/Off)", ParsedData, ref Manastone_Enabled);
@@ -905,7 +920,12 @@ namespace E3Core.Settings
             LoadKeyData("Cures", "Cure", ParsedData, Cures);
             LoadKeyData("Cures", "CureAll", ParsedData, CureAll);
             LoadKeyData("Cures", "RadiantCure", ParsedData, RadiantCure);
-            LoadKeyData("Cures", "CurseCounters", ParsedData, CurseCounterCure);
+
+			//if we have the AA add it to the collection before we load the rest. 
+			var tRC = new Spell("Radiant Cure");
+			if (tRC.CastType == CastingType.AA) RadiantCureSpells.Add(tRC);
+			LoadKeyData("Cures", "RadiantCureSpells", ParsedData, RadiantCureSpells);
+			LoadKeyData("Cures", "CurseCounters", ParsedData, CurseCounterCure);
 			LoadKeyData("Cures", "CurseCountersIgnore", ParsedData, CurseCounterIgnore);
 			LoadKeyData("Cures", "CorruptedCounters", ParsedData, CorruptedCounterCure);
 			LoadKeyData("Cures", "CorruptedCountersIgnore", ParsedData, CorruptedCounterIgnore);
@@ -1006,6 +1026,13 @@ namespace E3Core.Settings
 			section.Keys.AddKey("PctMana", "100");
 			section.Keys.AddKey("PctStam", "100");
 			section.Keys.AddKey("PctHealth", "100");
+
+			newFile.Sections.AddSection("Alerts");
+			section = newFile.Sections.GetSectionData("Alerts");
+			section.Keys.AddKey("Rampage Messages(On/Off)", "On");
+			section.Keys.AddKey("Damage Messages(On/Off)", "On");
+			section.Keys.AddKey("Reflect Messages(On/Off)", "On");
+
 
 			newFile.Sections.AddSection("Assist Settings");
 			section = newFile.Sections.GetSectionData("Assist Settings");
@@ -1166,6 +1193,7 @@ namespace E3Core.Settings
 				section.Keys.AddKey("Cure", "");
 				section.Keys.AddKey("CureAll", "");
 				section.Keys.AddKey("RadiantCure", "");
+				section.Keys.AddKey("RadiantCureSpells", "");
 				section.Keys.AddKey("CurseCounters", "");
 				section.Keys.AddKey("CurseCountersIgnore", "");
 				section.Keys.AddKey("CorruptedCounters", "");

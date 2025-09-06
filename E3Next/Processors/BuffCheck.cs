@@ -88,7 +88,7 @@ namespace E3Core.Processors
 				{
 					string buffToDrop = x.args[0];
 					DropBuff(buffToDrop);
-					E3.Bots.BroadcastCommand($"/removebuff {buffToDrop}");
+					E3.Bots.BroadcastCommandToGroup($"/removebuff {buffToDrop}");
 				}
 			});
 			EventProcessor.RegisterCommand("/dropbuffid", (x) =>
@@ -482,7 +482,7 @@ namespace E3Core.Processors
 		public static void Check_Buffs()
 		{
 			if (E3.IsInvis) return;
-			
+			if (Heals.IgnoreHealTargets.Count > 0) return;
 			//e3util.PrintTimerStatus(_buffTimers, ref _printoutTimer, "Buff timers");
 			//instant buffs have their own shouldcheck, need it snappy so check quickly.
 			if(!E3.CurrentInCombat)
@@ -493,7 +493,7 @@ namespace E3Core.Processors
 			{
 				if (Basics.AmIDead()) return;
 				if (e3util.IsManualControl() && !Basics.InCombat() && !MQ.Query<bool>("${Me.Standing}")) return;
-
+				if (E3.IsMoving && !Assist.IsAssisting) return;
 			}
 
 			Int32 targetID = MQ.Query<Int32>("${Target.ID}");
@@ -501,18 +501,18 @@ namespace E3Core.Processors
 			{
 				using (_log.Trace())
 				{
-
-					if (Assist.IsAssisting || Nukes.PBAEEnabled)
-					{
-						BuffBots(E3.CharacterSettings.CombatBuffs);
-						BuffBots(E3.CharacterSettings.CombatPetBuffs,true);
-						BuffBots(E3.CharacterSettings.CombatPetOwnerBuffs, true);
-					}
-
+					
 					/*if you are NOT following someone, and not moving, it will buff instantly. 
 					If you ARE following someone and not moving for 10+ seconds, it will buff.*/
-					if ((!Movement.IsMoving() && (String.IsNullOrWhiteSpace(Movement.FollowTargetName) && String.IsNullOrWhiteSpace(Movement.ChaseTargetName))) || Movement.StandingStillForTimePeriod())
+					if (((String.IsNullOrWhiteSpace(Movement.FollowTargetName) && String.IsNullOrWhiteSpace(Movement.ChaseTargetName))) || Movement.StandingStillForTimePeriod() || Assist.IsAssisting)
 					{
+						if (E3.CurrentInCombat || Nukes.PBAEEnabled)
+						{
+							BuffBots(E3.CharacterSettings.CombatBuffs);
+							BuffBots(E3.CharacterSettings.CombatPetBuffs, true);
+							BuffBots(E3.CharacterSettings.CombatPetOwnerBuffs, true);
+						}
+
 						if (!E3.CurrentInCombat)
 						{
 							//using(_log.Trace("Buffs-Aura"))
@@ -652,16 +652,21 @@ namespace E3Core.Processors
 	
 		private static void BuffBots(List<Data.Spell> buffs, bool usePets = false)
 		{
-			if (e3util.IsActionBlockingWindowOpen()) return;
+			
+
 			foreach (var spell in buffs)
 			{
+				if (e3util.IsActionBlockingWindowOpen()) return;
+				if (e3util.IsRezDiaglogBoxOpen()) return;
 				//if it the target is one of our base class short names, check all bots and their short name type for possible targets.
-				if(String.Equals(spell.CastTarget,"bots",StringComparison.OrdinalIgnoreCase))
+				if (String.Equals(spell.CastTarget,"bots",StringComparison.OrdinalIgnoreCase))
 				{
 					foreach (var name in E3.Bots.BotsConnected())
 					{
 						if (_spawns.TryByName(name, out var s))
 						{
+							if (spell.ExcludedClasses.Contains(s.ClassShortName)) { continue; }
+							if(spell.ExcludedNames.Contains(s.CleanName)) { continue; }	
 							string previousTarget = spell.CastTarget;
 							try
 							{
@@ -685,15 +690,15 @@ namespace E3Core.Processors
 					{
 						if (_spawns.TryByName(name, out var s))
 						{
+							if (spell.ExcludedClasses.Contains(s.ClassShortName)) { continue; }
+							if (spell.ExcludedNames.Contains(s.CleanName)) { continue; }
 
 							Int32 groupMemberIndex = MQ.Query<Int32>($"${{Group.Member[{name}].Index}}");
-
 							if (groupMemberIndex < 0)
 							{
 								//ignore it
 								continue;
 							}
-
 							string previousTarget = spell.CastTarget;
 							try
 							{
@@ -791,6 +796,8 @@ namespace E3Core.Processors
 					}
 				}
 
+				if (Heals.IgnoreHealTargets.Count>1) return BuffBots_ReturnType.Continue;
+
 				if (_spawns.TryByName(target, out s))
 				{
 					if (usePets && s.PetID < 1)
@@ -867,7 +874,7 @@ namespace E3Core.Processors
 						//Is the buff still good? if so, skip
 
 						if (Casting.BuffNotReady(spell)) return BuffBots_ReturnType.Continue;
-
+						
 						if (BuffTimerIsGood(spell, s, usePets))
 						{
 							return BuffBots_ReturnType.Continue;
@@ -1343,7 +1350,7 @@ namespace E3Core.Processors
 			//doesn't have the buff, or its expired
 			return false;
 		}
-		private static bool BuffTimerIsGood(Data.Spell spell, Spawn s, bool usePets)
+		public static bool BuffTimerIsGood(Data.Spell spell, Spawn s, bool usePets)
 		{
 			SpellTimer st;
 			if (_buffTimers.TryGetValue(s.ID, out st))
@@ -1915,7 +1922,7 @@ namespace E3Core.Processors
 
 					string manastoneName = "Manastone";
 					Int32 totalClicksToTry = 5;
-					Int32 delayBetweenClicks = 40;
+					Int32 delayBetweenClicks = 20;
 					Int32 maxLoop = 25;
 					if (hasManaStone && (hasSongBuffv1 || hasSongBuffv2 || hasSongBuffv3 || hasSongBuffv4))
 					{
