@@ -2291,8 +2291,13 @@ namespace E3Core.Processors
 				tIF = tIF.ReplaceInsensitive("${IsNotSafeZone}", (!Zoning.CurrentZone.IsSafeZone).ToString());
 			}
 			//StandingStillForTimePeriod()
+			if (tIF.IndexOf("${BegBuffTarget}", 0, StringComparison.OrdinalIgnoreCase) > -1)
+            {
+                //lets replace it with TRUE/FALSE
+                tIF = tIF.ReplaceInsensitive("${BegBuffTarget}", BegForBuffs.begBuffTarget.ToString());
+            }
 
-			return tIF;
+            return tIF;
 		}
 
 		static Regex _e3buffexistsRegEx = new Regex(@"\$\{E3BuffExists\[([A-Za-z0-9 _]+),([A-Za-z0-9 _]+)\]\}", RegexOptions.Compiled);

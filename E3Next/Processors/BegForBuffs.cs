@@ -24,6 +24,7 @@ namespace E3Core.Processors
             public Int64 TimeStamp = 0;
         }
 
+        
         public static string _lastSuccesfulCast = String.Empty;
         public static Logging _log = E3.Log;
         private static IMQ MQ = E3.MQ;
@@ -34,6 +35,8 @@ namespace E3Core.Processors
         private static Queue<BuffQueuedItem> _queuedBuffs = new Queue<BuffQueuedItem>();
         private static SpellAliasDataFile _spellAliasesDataFile = new SpellAliasDataFile();
         public static Dictionary<string, string> SpellAliases;
+        public static Int32 begBuffTarget = 0;
+
         [SubSystemInit]
         public static void BegForBuffs_Init()
         {
@@ -85,8 +88,9 @@ namespace E3Core.Processors
 									_log.Write($"Checking spell {spell.CastName}");
 									if (!String.IsNullOrWhiteSpace(spell.Ifs))
 									{
-                                       
-										if (!Casting.Ifs(spell))
+                                        begBuffTarget = spawn.ID;
+
+                                        if (!Casting.Ifs(spell))
 										{
 											continue;
 										}
