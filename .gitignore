@@ -129,3 +129,4 @@ UpgradeLog*.XML
 test-results/
 >>>>>>> Stashed changes
 /DiscordApiLibrary/obj
+/E3Next/Resources/BuildDate.txt
